@@ -1,0 +1,11 @@
+{
+  "Id": "WagonDestination",
+  "DisplayName": "Wagon Destination",
+  "Author": "Andrei-Alexandru Tudor",
+  "Version": "0.1.0",
+  "AssemblyName": "WagonDestination.dll",
+  "EntryMethod": "DvMod.WagonDestination.Main.Load",
+  "ManagerVersion": "0.27.3",
+  "Repository": "https://raw.githubusercontent.com/Alexand3r/dv-wagon-destination/master/repository.json",
+  "HomePage": "https://github.com/Alexand3r/dv-wagon-destination"
+}
