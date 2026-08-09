@@ -5,13 +5,14 @@ using HarmonyLib;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace DvMod.WagonDestination
 {
     internal static class PlateDestination
     {
         private const string ObjectName = "WagonDestinationText";
-        private const int RowWidth = TrainCarPlate.CARGO_AND_JOB_INFO_CHARACTERS_PER_ROW;
+        internal const int RowWidth = TrainCarPlate.CARGO_AND_JOB_INFO_CHARACTERS_PER_ROW;
 
         /// <summary>Destination track for this car ("GF-D6I"), or the chain's
         /// destination yard when no task names a track. Null without a job.</summary>
@@ -120,17 +121,88 @@ namespace DvMod.WagonDestination
         }
     }
 
-    /// <summary>The loco HUD mirrors the plate's text fields; its layout is
-    /// proportional, so the destination rides the cargo row with a plain
-    /// separator instead of column padding.</summary>
+    /// <summary>The loco HUD mirrors the plate's text but renders it in a
+    /// proportional font, so the game's space padding — which lines the job id
+    /// up on the physical plate — lands at an arbitrary column here. The
+    /// destination gets its own text object instead, moved so its right edge
+    /// matches the rendered right edge of the job id one row below.</summary>
+    internal static class HudDestination
+    {
+        private const string ObjectName = "WagonDestinationText";
+
+        public static void Update(HUDTrainPlateInfo hud, string? dest)
+        {
+            var src = hud.cargoMassJobId;
+            var row = hud.cargoType;
+            if (src == null || row == null)
+                return;
+            var tmp = GetOrCreateText(src);
+            if (tmp == null)
+                return;
+            if (string.IsNullOrEmpty(dest))
+            {
+                tmp.text = string.Empty;
+                return;
+            }
+            tmp.text = dest;
+            // Both objects are copies of the same field, so their local spaces
+            // share scale and font metrics: the difference of the two rendered
+            // right edges is exactly how far the copy must move right.
+            float dx = RightEdge(src) - RightEdge(tmp);
+            var parent = src.transform.parent;
+            float dy = parent.InverseTransformPoint(row.transform.position).y
+                - parent.InverseTransformPoint(src.transform.position).y;
+            tmp.transform.localPosition = src.transform.localPosition + new Vector3(dx, dy, 0f);
+        }
+
+        /// <summary>Local-space x of the right edge of the last visible glyph,
+        /// i.e. where the text actually ends regardless of alignment or of how
+        /// wide the game's padding spaces happen to render.</summary>
+        private static float RightEdge(TMP_Text text)
+        {
+            text.ForceMeshUpdate();
+            var info = text.textInfo;
+            for (int i = info.characterCount - 1; i >= 0; i--)
+            {
+                if (info.characterInfo[i].isVisible)
+                    return info.characterInfo[i].topRight.x;
+            }
+            return 0f;
+        }
+
+        private static TextMeshProUGUI? GetOrCreateText(TextMeshProUGUI src)
+        {
+            var parent = src.transform.parent;
+            var existing = parent.Find(ObjectName);
+            if (existing != null)
+                return existing.GetComponent<TextMeshProUGUI>();
+            var go = Object.Instantiate(src.gameObject, parent);
+            go.name = ObjectName;
+            // The HUD panel lays its rows out; an ignored element keeps the
+            // copy at the position set here instead of being reflowed into the
+            // row list as an extra child.
+            var layout = go.GetComponent<LayoutElement>() ?? go.AddComponent<LayoutElement>();
+            layout.ignoreLayout = true;
+            // A Localize component on the original would overwrite the copy's
+            // text with a translated string on every language event.
+            foreach (var component in go.GetComponents<Component>())
+            {
+                if (component.GetType().FullName == "DV.Localization.Localize")
+                    Object.Destroy(component);
+            }
+            var tmp = go.GetComponent<TextMeshProUGUI>();
+            if (tmp != null)
+                tmp.text = string.Empty;
+            return tmp;
+        }
+    }
+
     [HarmonyPatch(typeof(HUDTrainPlateInfo), "UpdateFromPlate")]
     internal static class HUDTrainPlateInfoPatch
     {
         public static void Postfix(HUDTrainPlateInfo __instance, TrainCarPlatesController controller)
         {
-            var dest = PlateDestination.DestinationFor(controller);
-            if (!string.IsNullOrEmpty(dest))
-                __instance.cargoType.text = controller.cargoTypeText + "   " + dest;
+            HudDestination.Update(__instance, PlateDestination.DestinationFor(controller));
         }
     }
 }
