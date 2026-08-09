@@ -12,10 +12,8 @@ namespace DvMod.WagonDestination
     internal static class PlateDestination
     {
         private const string ObjectName = "WagonDestinationText";
-        internal const int RowWidth = TrainCarPlate.CARGO_AND_JOB_INFO_CHARACTERS_PER_ROW;
+        private const int RowWidth = TrainCarPlate.CARGO_AND_JOB_INFO_CHARACTERS_PER_ROW;
 
-        /// <summary>Destination track for this car ("GF-D6I"), or the chain's
-        /// destination yard when no task names a track. Null without a job.</summary>
         public static string? DestinationFor(TrainCarPlatesController controller)
         {
             // The plate only shows a job id while a job references this car;
@@ -42,9 +40,8 @@ namespace DvMod.WagonDestination
             }
         }
 
-        /// <summary>A dedicated text object cloned from the job-id line: same
-        /// font, size and row geometry, one line higher — so PadLeft lands the
-        /// destination in exactly the job id's column.</summary>
+        /// <summary>Cloned from the job-id line so PadLeft columns match, and
+        /// sat one line above it.</summary>
         private static TextMeshPro? GetOrCreateText(TrainCarPlate plate)
         {
             var src = plate.cargoMassJobId;
@@ -67,9 +64,8 @@ namespace DvMod.WagonDestination
             var tmp = go.GetComponent<TextMeshPro>();
             if (tmp == null)
                 return null;
-            // Measure the actual rendered line height (TMP's own metrics, in
-            // the text object's local units) instead of trusting font-asset
-            // math, then convert to the parent's space via the local scale.
+            // Rendered line height, not font-asset math: TMP applies its own
+            // spacing and auto-sizing on top of the font's metrics.
             tmp.text = "X";
             tmp.ForceMeshUpdate();
             float lineHeight = tmp.textInfo.lineInfo[0].lineHeight * go.transform.localScale.y;
@@ -78,9 +74,8 @@ namespace DvMod.WagonDestination
             return tmp;
         }
 
-        /// <summary>The last task in the job that moves this car to a named
-        /// track — its destination is where the car must end up. Covers
-        /// per-cut targets in shunting jobs, not just the chain's final yard.</summary>
+        /// <summary>Last match wins: a shunting job moves a car through several
+        /// tracks, and only the final one is where it must end up.</summary>
         private static string? FinalTrackForCar(Job job, Car car)
         {
             string? result = null;
@@ -110,8 +105,6 @@ namespace DvMod.WagonDestination
         }
     }
 
-    /// <summary>Runs after the game rewrites the cargo/job rows (job assigned,
-    /// cargo loaded/unloaded), for the physical plates on the car.</summary>
     [HarmonyPatch(typeof(TrainCarPlatesController), "RefreshDerivedCargoJobData")]
     internal static class TrainCarPlatesControllerPatch
     {
@@ -121,11 +114,9 @@ namespace DvMod.WagonDestination
         }
     }
 
-    /// <summary>The loco HUD mirrors the plate's text but renders it in a
-    /// proportional font, so the game's space padding — which lines the job id
-    /// up on the physical plate — lands at an arbitrary column here. The
-    /// destination gets its own text object instead, moved so its right edge
-    /// matches the rendered right edge of the job id one row below.</summary>
+    /// <summary>The HUD renders the same strings in a proportional font, where
+    /// the game's space padding no longer lines up as a column, so the
+    /// destination is placed by measured geometry instead.</summary>
     internal static class HudDestination
     {
         private const string ObjectName = "WagonDestinationText";
@@ -145,9 +136,8 @@ namespace DvMod.WagonDestination
                 return;
             }
             tmp.text = dest;
-            // Both objects are copies of the same field, so their local spaces
-            // share scale and font metrics: the difference of the two rendered
-            // right edges is exactly how far the copy must move right.
+            // Copy and original share a local space, so the gap between their
+            // right edges is how far the copy must move to align with the job id.
             float dx = RightEdge(src) - RightEdge(tmp);
             var parent = src.transform.parent;
             float dy = parent.InverseTransformPoint(row.transform.position).y
@@ -155,9 +145,8 @@ namespace DvMod.WagonDestination
             tmp.transform.localPosition = src.transform.localPosition + new Vector3(dx, dy, 0f);
         }
 
-        /// <summary>Local-space x of the right edge of the last visible glyph,
-        /// i.e. where the text actually ends regardless of alignment or of how
-        /// wide the game's padding spaces happen to render.</summary>
+        /// <summary>Where the glyphs actually end, which trailing padding
+        /// spaces and the field's own alignment both hide.</summary>
         private static float RightEdge(TMP_Text text)
         {
             text.ForceMeshUpdate();
@@ -178,13 +167,12 @@ namespace DvMod.WagonDestination
                 return existing.GetComponent<TextMeshProUGUI>();
             var go = Object.Instantiate(src.gameObject, parent);
             go.name = ObjectName;
-            // The HUD panel lays its rows out; an ignored element keeps the
-            // copy at the position set here instead of being reflowed into the
-            // row list as an extra child.
+            // Keeps a layout group on the panel from reflowing the copy as an
+            // extra row.
             var layout = go.GetComponent<LayoutElement>() ?? go.AddComponent<LayoutElement>();
             layout.ignoreLayout = true;
-            // A Localize component on the original would overwrite the copy's
-            // text with a translated string on every language event.
+            // Inherited from the original, it would overwrite the destination
+            // with a translated string on every language change.
             foreach (var component in go.GetComponents<Component>())
             {
                 if (component.GetType().FullName == "DV.Localization.Localize")
