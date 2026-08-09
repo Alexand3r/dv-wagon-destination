@@ -4,7 +4,11 @@ A mod for [Derail Valley](https://store.steampowered.com/app/588030/Derail_Valle
 
 While a job references a car, the car's info plates gain a destination line above the job id: the track the job's last task moves that car to (`GF-D6I`), falling back to the job chain's destination yard. The line clears with the job, so a car without work shows nothing extra.
 
+![Car info plate showing destination HB-D2S above job id HB-SU-62](docs/plate.png)
+
 The destination also appears in the loco HUD's plate panel, on the cargo row, right-aligned with the job id below it.
+
+![Loco HUD plate panel showing the same destination line](docs/hud.png)
 
 ## Requirements
 
