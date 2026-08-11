@@ -3,7 +3,6 @@ using DV.UI.LocoHUD;
 using DV.Utils;
 using HarmonyLib;
 using System.Collections.Generic;
-using System.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -48,10 +47,11 @@ namespace DvMod.WagonDestination
                     plate.carMassLength.text = CarMassLengthText(controller);
                 if (plate.cargoType == null)
                     continue;
+                CargoNameClipper.Sanitize(plate.cargoType);
+                // The game already reset the row to the full name this refresh;
+                // clipping just rewrites it, so the off-path needs no cleanup.
                 if (ownRow && Main.settings.ellipsizeCargoName)
-                    CargoNameClipper.Apply(plate.cargoType, tmp);
-                else
-                    CargoNameClipper.Restore(plate.cargoType);
+                    CargoNameClipper.Apply(plate.cargoType, controller.cargoTypeText, tmp);
                 if (ownRow)
                     AlignBaseline(plate.cargoType, tmp);
             }
@@ -209,17 +209,31 @@ namespace DvMod.WagonDestination
     /// character counts.</summary>
     internal static class CargoNameClipper
     {
-        private static readonly Dictionary<TMP_Text, (TextOverflowModes overflow, float rightMargin)> originals
-            = new Dictionary<TMP_Text, (TextOverflowModes, float)>();
-
-        // What the game's rows use untouched; also the fallback when this
-        // assembly was hot-reloaded and the remembered originals are gone but
-        // the clip is still stuck on the live text.
-        private static readonly (TextOverflowModes overflow, float rightMargin) Vanilla
-            = (TextOverflowModes.Overflow, 0f);
-
-        public static void Apply(TMP_Text row, TMP_Text dest)
+        /// <summary>Older builds of this mod clipped with overflow margins that
+        /// survive on the live texts across mod reloads; flatten them so the
+        /// geometry is clean.</summary>
+        public static void Sanitize(TMP_Text row)
         {
+            if (row.overflowMode == TextOverflowModes.Ellipsis)
+                row.overflowMode = TextOverflowModes.Overflow;
+            if (row.margin.z != 0f)
+            {
+                var margin = row.margin;
+                margin.z = 0f;
+                row.margin = margin;
+            }
+        }
+
+        /// <summary>Rebuilds the row's text as the full name truncated at the
+        /// destination's left edge. Stateless on purpose: every call starts
+        /// from the full name, and the game rewrites the row on every refresh
+        /// anyway, so nothing needs restoring and nothing can accumulate.
+        /// (An earlier margin-based clip fed back into the HUD's layout and
+        /// shaved the name further on every hover.)</summary>
+        public static void Apply(TMP_Text row, string fullName, TMP_Text dest)
+        {
+            if (string.IsNullOrEmpty(fullName))
+                return;
             float destLeft = LeftEdge(dest);
             if (float.IsNaN(destLeft))
                 return;
@@ -227,59 +241,25 @@ namespace DvMod.WagonDestination
             // Half a wide glyph of breathing room, in the row's own units.
             float gap = row.GetPreferredValues("M").x * 0.5f;
             float limit = row.rectTransform.InverseTransformPoint(world).x - gap;
-            if (!originals.TryGetValue(row, out var original))
+            row.text = fullName;
+            row.ForceMeshUpdate();
+            var info = row.textInfo;
+            int count = Mathf.Min(info.characterCount, fullName.Length);
+            int fit = count;
+            for (int i = 0; i < count; i++)
             {
-                Prune();
-                original = row.overflowMode == TextOverflowModes.Ellipsis
-                    ? Vanilla
-                    : (row.overflowMode, row.margin.z);
-                originals[row] = original;
+                if (info.characterInfo[i].xAdvance > limit)
+                {
+                    fit = i;
+                    break;
+                }
             }
-            row.overflowMode = TextOverflowModes.Ellipsis;
-            var margin = row.margin;
-            margin.z = Mathf.Max(original.rightMargin, row.rectTransform.rect.xMax - limit);
-            row.margin = margin;
-        }
-
-        public static void Restore(TMP_Text row)
-        {
-            if (!originals.TryGetValue(row, out var original))
-            {
-                if (row.overflowMode != TextOverflowModes.Ellipsis)
-                    return;
-                original = Vanilla;
-            }
-            else
-            {
-                originals.Remove(row);
-            }
-            row.overflowMode = original.overflow;
-            var margin = row.margin;
-            margin.z = original.rightMargin;
-            row.margin = margin;
-        }
-
-        /// <summary>Unload/reload cleanup: put every row this assembly touched
-        /// back, since the next load starts with an empty table.</summary>
-        public static void RestoreAll()
-        {
-            foreach (var row in originals.Keys.ToList())
-            {
-                if (row != null)
-                    Restore(row);
-            }
-            originals.Clear();
-        }
-
-        /// <summary>Plates are destroyed with their cars; drop dead keys before
-        /// the map can grow past them.</summary>
-        private static void Prune()
-        {
-            if (originals.Count < 64)
+            if (fit >= count)
                 return;
-            var dead = originals.Keys.Where(key => key == null).ToList();
-            foreach (var key in dead)
-                originals.Remove(key);
+            float dots = row.GetPreferredValues("…").x;
+            while (fit > 0 && info.characterInfo[fit - 1].xAdvance > limit - dots)
+                fit--;
+            row.text = fullName.Substring(0, fit).TrimEnd() + "…";
         }
 
         /// <summary>Local x where the glyphs start, which leading alignment
@@ -314,6 +294,7 @@ namespace DvMod.WagonDestination
             var tmp = GetOrCreateText(src);
             if (tmp == null)
                 return;
+            CargoNameClipper.Sanitize(row);
             src.text = PlateDestination.JobRowText(
                 controller, Main.settings.destinationOnJobRow ? dest : null);
             if (hud.carMassLength != null)
@@ -321,7 +302,6 @@ namespace DvMod.WagonDestination
             if (string.IsNullOrEmpty(dest) || Main.settings.destinationOnJobRow)
             {
                 tmp.text = string.Empty;
-                CargoNameClipper.Restore(row);
                 return;
             }
             tmp.text = dest;
@@ -332,10 +312,10 @@ namespace DvMod.WagonDestination
             float dy = parent.InverseTransformPoint(row.transform.position).y
                 - parent.InverseTransformPoint(src.transform.position).y;
             tmp.transform.localPosition = src.transform.localPosition + new Vector3(dx, dy, 0f);
+            // The hover already reset the row to the full name; clipping just
+            // rewrites it, so the off-path needs no cleanup.
             if (Main.settings.ellipsizeCargoName)
-                CargoNameClipper.Apply(row, tmp);
-            else
-                CargoNameClipper.Restore(row);
+                CargoNameClipper.Apply(row, controller.cargoTypeText, tmp);
         }
 
         /// <summary>Where the glyphs actually end, which trailing padding
