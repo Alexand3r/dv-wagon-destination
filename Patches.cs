@@ -120,6 +120,10 @@ namespace DvMod.WagonDestination
     internal static class HudDestination
     {
         private const string ObjectName = "WagonDestinationText";
+        private const float CargoNameGap = 10f;
+
+        private static TextOverflowModes? originalOverflow;
+        private static float? originalRightMargin;
 
         public static void Update(HUDTrainPlateInfo hud, string? dest)
         {
@@ -133,6 +137,7 @@ namespace DvMod.WagonDestination
             if (string.IsNullOrEmpty(dest))
             {
                 tmp.text = string.Empty;
+                RestoreCargoName(row);
                 return;
             }
             tmp.text = dest;
@@ -143,6 +148,53 @@ namespace DvMod.WagonDestination
             float dy = parent.InverseTransformPoint(row.transform.position).y
                 - parent.InverseTransformPoint(src.transform.position).y;
             tmp.transform.localPosition = src.transform.localPosition + new Vector3(dx, dy, 0f);
+            EllipsizeCargoName(row, tmp);
+        }
+
+        /// <summary>The destination shares its row with the cargo name, so long
+        /// names run under it; clip the name with an ellipsis at the
+        /// destination's left edge. Margin instead of rect width so the
+        /// panel's layout group is unaffected.</summary>
+        private static void EllipsizeCargoName(TextMeshProUGUI row, TextMeshProUGUI dest)
+        {
+            float destLeft = LeftEdge(dest);
+            if (float.IsNaN(destLeft))
+                return;
+            var world = dest.rectTransform.TransformPoint(new Vector3(destLeft, 0f, 0f));
+            float limit = row.rectTransform.InverseTransformPoint(world).x - CargoNameGap;
+            if (originalOverflow == null)
+            {
+                originalOverflow = row.overflowMode;
+                originalRightMargin = row.margin.z;
+            }
+            row.overflowMode = TextOverflowModes.Ellipsis;
+            var margin = row.margin;
+            margin.z = Mathf.Max(originalRightMargin!.Value, row.rectTransform.rect.xMax - limit);
+            row.margin = margin;
+        }
+
+        private static void RestoreCargoName(TextMeshProUGUI row)
+        {
+            if (originalOverflow == null)
+                return;
+            row.overflowMode = originalOverflow.Value;
+            var margin = row.margin;
+            margin.z = originalRightMargin!.Value;
+            row.margin = margin;
+        }
+
+        /// <summary>Local x where the glyphs start, which leading alignment
+        /// hides; NaN when nothing is visible.</summary>
+        private static float LeftEdge(TMP_Text text)
+        {
+            text.ForceMeshUpdate();
+            var info = text.textInfo;
+            for (int i = 0; i < info.characterCount; i++)
+            {
+                if (info.characterInfo[i].isVisible)
+                    return info.characterInfo[i].bottomLeft.x;
+            }
+            return float.NaN;
         }
 
         /// <summary>Where the glyphs actually end, which trailing padding
