@@ -68,6 +68,7 @@ namespace DvMod.WagonDestination
                 UnloadWatcher.UnloadRequested -= Stop;
                 WorldStreamingInit.LoadingFinished -= Start;
                 harmony.UnpatchAll(modEntry.Info.Id);
+                CargoNameClipper.RestoreAll();
             }
             enabled = value;
             return true;
