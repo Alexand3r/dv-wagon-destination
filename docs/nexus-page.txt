@@ -32,7 +32,7 @@ giving you:
 
 [size=4]Source code[/size]
 
-[[url=https://github.com/Alexand3r/dv-wagon-destination]GitHub - dv-wagon-destination[/url]]
+[[url=https://github.com/brajuitorul/dv-wagon-destination]GitHub - dv-wagon-destination[/url]]
 
 [size=4]Shout outs[/size]
 
