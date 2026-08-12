@@ -6,6 +6,7 @@ namespace DvMod.WagonDestination
     public class Settings : UnityModManager.ModSettings
     {
         public bool destinationOnJobRow = false;
+        public bool destinationTrackOnly = false;
         public bool ellipsizeCargoName = true;
         public bool massInTonnes = false;
         public bool enableLogging = true;
@@ -15,6 +16,7 @@ namespace DvMod.WagonDestination
         public void Draw()
         {
             bool prevJobRow = destinationOnJobRow;
+            bool prevTrackOnly = destinationTrackOnly;
             bool prevEllipsize = ellipsizeCargoName;
             bool prevTonnes = massInTonnes;
             GUILayout.BeginVertical(GUILayout.ExpandWidth(false));
@@ -28,6 +30,8 @@ namespace DvMod.WagonDestination
                 },
                 1, GUI.skin.toggle) == 1;
             GUILayout.Space(10);
+            destinationTrackOnly = GUILayout.Toggle(destinationTrackOnly,
+                " Show only the track, without the yard (FM-B3S -> B3S)");
             ellipsizeCargoName = GUILayout.Toggle(ellipsizeCargoName,
                 " Shorten long cargo names with … where the destination would overlap");
             massInTonnes = GUILayout.Toggle(massInTonnes,
@@ -35,8 +39,8 @@ namespace DvMod.WagonDestination
             enableLogging = GUILayout.Toggle(enableLogging,
                 " Write debug detail to the mod log (Player.log)");
             GUILayout.EndVertical();
-            if (prevJobRow != destinationOnJobRow || prevEllipsize != ellipsizeCargoName
-                || prevTonnes != massInTonnes)
+            if (prevJobRow != destinationOnJobRow || prevTrackOnly != destinationTrackOnly
+                || prevEllipsize != ellipsizeCargoName || prevTonnes != massInTonnes)
                 PlateDestination.RefreshAll();
         }
 

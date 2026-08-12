@@ -26,7 +26,11 @@ namespace DvMod.WagonDestination
             var job = SingletonBehaviour<JobsManager>.Instance?.GetJobOfCar(logicCar);
             if (job == null)
                 return null;
-            return FinalTrackForCar(job, logicCar) ?? job.chainData?.chainDestinationYardId;
+            var track = FinalTrackForCar(job, logicCar);
+            if (track != null)
+                return Main.settings.destinationTrackOnly ? track.TrackPartOnly : track.FullDisplayID;
+            // Yard-only fallback: there is no track part to reduce it to.
+            return job.chainData?.chainDestinationYardId;
         }
 
         public static void UpdatePlates(TrainCarPlatesController controller)
@@ -163,13 +167,13 @@ namespace DvMod.WagonDestination
 
         /// <summary>Last match wins: a shunting job moves a car through several
         /// tracks, and only the final one is where it must end up.</summary>
-        private static string? FinalTrackForCar(Job job, Car car)
+        private static TrackID? FinalTrackForCar(Job job, Car car)
         {
-            string? result = null;
+            TrackID? result = null;
             foreach (var data in Flatten(job.tasks))
             {
                 if (data.cars != null && data.cars.Contains(car) && data.destinationTrack != null)
-                    result = data.destinationTrack.ID.FullDisplayID;
+                    result = data.destinationTrack.ID;
             }
             return result;
         }

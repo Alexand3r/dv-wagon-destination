@@ -2,7 +2,7 @@
   "Id": "WagonDestination",
   "DisplayName": "Wagon Destination",
   "Author": "Andrei-Alexandru Tudor",
-  "Version": "0.1.2",
+  "Version": "0.1.3",
   "AssemblyName": "WagonDestination.dll",
   "EntryMethod": "DvMod.WagonDestination.Main.Load",
   "ManagerVersion": "0.27.3",
